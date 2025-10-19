@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="../../../../../vendor/shopware/platform/src/Core/Framework/Plugin/Manifest/schema/config.xsd">
+    <card>
+        <title>Migration Oxid -> Shopware</title>
+
+        <input-field type="text">
+            <name>accessKeyId</name>
+            <label>Shopware Access Key ID</label>
+            <defaultValue></defaultValue>
+        </input-field>
+
+        <input-field type="text">
+            <name>accessKeySecret</name>
+            <label>Shopware Access Key Secret</label>
+            <defaultValue></defaultValue>
+        </input-field>
+
+        <input-field type="text">
+            <name>oxidDbHost</name>
+            <label>OXID DB Host</label>
+            <defaultValue>localhost</defaultValue>
+        </input-field>
+
+        <input-field type="text">
+            <name>oxidDbName</name>
+            <label>OXID DB Name</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>oxidDbUser</name>
+            <label>OXID DB User</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>oxidDbPass</name>
+            <label>OXID DB Passwort</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>oxidImageBasePath</name>
+            <label>OXID Bildpfad</label>
+            <defaultValue>/var/www/html/oxid/out/pictures/master/product</defaultValue>
+        </input-field>
+
+    </card>
+</config>
