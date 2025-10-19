@@ -1,0 +1,35 @@
+# -----------------------------------
+# 🧩 Shopware Plugin Gitignore
+# -----------------------------------
+
+# Composer & PHP
+/vendor/
+/composer.lock
+
+# Shopware / DDEV Caches & Builds
+/var/
+/build/
+/node_modules/
+/public/bundles/
+/public/theme/
+
+# IDE & Editor Files
+.idea/
+/.vscode/
+/.DS_Store
+
+# PHPUnit & Coverage
+/phpunit.xml
+/phpunit.xml.dist
+/tests/_output/
+/coverage/
+
+# System files
+*.log
+*.cache
+*.tmp
+
+# OS junk
+Thumbs.db
+.DS_Store
+ehthumbs.db
