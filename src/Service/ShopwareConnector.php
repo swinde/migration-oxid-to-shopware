@@ -1,42 +1,29 @@
 <?php
-
 namespace MigrationSwinde\MigrationOxidToShopware\Service;
+
+use GuzzleHttp\Client;
 
 class ShopwareConnector
 {
-    private string $url;
-    private string $accessKeyId;
-    private string $accessKeySecret;
-    private ?string $token = null;
+    private string $apiUrl;
+    private string $accessKey;
 
-    public function __construct(array $config)
+    public function __construct(string $apiUrl, string $accessKey)
     {
-        $this->url = rtrim($config['url'], '/');
-        $this->accessKeyId = $config['access_key_id'];
-        $this->accessKeySecret = $config['access_key_secret'];
+        $this->apiUrl = rtrim($apiUrl, '/');
+        $this->accessKey = $accessKey;
     }
 
-    public function getToken(): string
+    public function productExists(string $productNumber): bool
     {
-        if ($this->token) {
-            return $this->token;
-        }
+        // Einfacher GET-Request prüfen, echte Logik kann angepasst werden
+        return false;
+    }
 
-        $ch = curl_init($this->url . '/api/oauth/token');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, [
-            'client_id' => $this->accessKeyId,
-            'client_secret' => $this->accessKeySecret,
-            'grant_type' => 'client_credentials'
-        ]);
-
-        $response = curl_exec($ch);
-        $data = json_decode($response, true);
-        if (!isset($data['access_token'])) {
-            throw new \RuntimeException('❌ Shopware Token konnte nicht abgerufen werden');
-        }
-
-        $this->token = $data['access_token'];
-        return $this->token;
+    public function createProduct(array $product, array $mediaIds = []): bool
+    {
+        // Hier den POST-Request an /api/product einbauen
+        // $product enthält alle Daten, $mediaIds die Media-IDs
+        return true;
     }
 }

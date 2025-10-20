@@ -1,51 +1,68 @@
-<?php declare(strict_types=1);
-
+<?php
 namespace MigrationSwinde\MigrationOxidToShopware\Service;
 
-use PDO;
-use Shopware\Core\Framework\Uuid\Uuid;
+use Shopware\Core\System\SystemConfig\SystemConfigService;
 
 class ProductMigrator
 {
-    private PDO $oxidDb;
+    private SystemConfigService $configService;
+    private OxidConnector $oxidConnector;
+    private ShopwareConnector $shopwareConnector;
+    private MediaUploader $mediaUploader;
 
-    public function __construct(array $oxidDbConfig)
+    public function __construct(
+        SystemConfigService $configService,
+        OxidConnector $oxidConnector,
+        ShopwareConnector $shopwareConnector,
+        MediaUploader $mediaUploader
+    ) {
+        $this->configService = $configService;
+        $this->oxidConnector = $oxidConnector;
+        $this->shopwareConnector = $shopwareConnector;
+        $this->mediaUploader = $mediaUploader;
+    }
+
+    /**
+     * Hauptfunktion zur Migration aller Produkte
+     */
+    public function migrateProducts(): void
     {
-        if (empty($oxidDbConfig['host'] ?? null)) {
-            throw new \RuntimeException('Fehlende OXID Datenbank-Konfiguration.');
+        $products = $this->oxidConnector->fetchProducts();
+
+        foreach ($products as $product) {
+
+            // Varianten prüfen
+            if (!empty($product['OXPARENTID'])) {
+                // Skip Variante, kann Logik angepasst werden
+                continue;
+            }
+
+            // Prüfen, ob Produkt schon existiert
+            if ($this->shopwareConnector->productExists($product['OXARTNUM'])) {
+                echo "Produkt existiert bereits: " . $product['OXARTNUM'] . PHP_EOL;
+                continue;
+            }
+
+            // Bilder vorbereiten
+            $images = $this->oxidConnector->fetchImages($product);
+            $mediaIds = [];
+            foreach ($images as $image) {
+                $mediaId = $this->mediaUploader->uploadMedia($image, $product['OXTITLE']);
+                if ($mediaId) {
+                    $mediaIds[] = $mediaId;
+                } else {
+                    echo "⚠ Bild konnte nicht hochgeladen werden: {$image}" . PHP_EOL;
+                }
+            }
+
+            // Produkt an Shopware übertragen
+            $success = $this->shopwareConnector->createProduct($product, $mediaIds);
+
+            if ($success) {
+                echo "✔ Produkt migriert: {$product['OXTITLE']}" . PHP_EOL;
+            } else {
+                echo "❌ Fehler beim Anlegen des Produkts: {$product['OXTITLE']}" . PHP_EOL;
+            }
         }
-
-        $this->oxidDb = new PDO(
-            "mysql:host={$oxidDbConfig['host']};dbname={$oxidDbConfig['dbname']};charset=utf8",
-            $oxidDbConfig['user'],
-            $oxidDbConfig['pass']
-        );
-    }
-
-    public function fetchProducts(): array
-    {
-        $stmt = $this->oxidDb->query("SELECT * FROM oxarticles WHERE OXSHOPID=1");
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    public function migrateProduct(array $productData): string
-    {
-        // UUID für Sync-Operation
-        $uuid = Uuid::randomHex();
-
-        // Hier Sync-API Payload aufbauen
-        $payload = [
-            'write' => [
-                'op_' . $uuid => [
-                    'entity' => 'product',
-                    'action' => 'upsert',
-                    'payload' => [$productData]
-                ]
-            ]
-        ];
-
-        // API-Aufruf hier (z.B. via Guzzle oder curl)
-        // return mediaId oder Erfolg/Fatal-Fehler
-        return $uuid;
     }
 }

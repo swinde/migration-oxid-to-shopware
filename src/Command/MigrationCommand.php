@@ -2,37 +2,27 @@
 
 namespace MigrationSwinde\MigrationOxidToShopware\Command;
 
-use MigrationSwinde\MigrationOxidToShopware\Service\ProductMigrator;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Attribute\AsCommand;
 
+
+// Command name
+#[AsCommand(name: 'migration:oxid')]
 class MigrationCommand extends Command
 {
-    protected static $defaultName = 'migration:oxid';
+    //protected static $defaultName = 'migration:oxid'; // <-- hier der Name
 
-    private ProductMigrator $migrator;
-
-    public function __construct(ProductMigrator $migrator)
+    protected function configure(): void
     {
-        parent::__construct();
-        $this->migrator = $migrator;
+        $this->setDescription('Migrates products from OXID to Shopware');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $products = $this->migrator->fetchProducts();
-
-        foreach ($products as $product) {
-            try {
-                $uuid = $this->migrator->migrateProduct($product);
-                $output->writeln("✅ Produkt migriert: {$product['OXTITLE']} (UUID: $uuid)");
-            } catch (\Throwable $e) {
-                $output->writeln("❌ Fehler beim Anlegen des Produkts: {$product['OXTITLE']}");
-                $output->writeln("   " . $e->getMessage());
-                return Command::FAILURE;
-            }
-        }
+        $output->writeln('Migration gestartet...');
+        // hier deinen Migration-Code aufrufen
 
         return Command::SUCCESS;
     }

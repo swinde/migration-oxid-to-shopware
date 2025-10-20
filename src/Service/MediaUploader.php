@@ -1,26 +1,28 @@
-<?php declare(strict_types=1);
-
+<?php
 namespace MigrationSwinde\MigrationOxidToShopware\Service;
 
 class MediaUploader
 {
-    private string $shopwareUrl;
-    private string $token;
+    private ShopwareConnector $shopwareConnector;
 
-    public function __construct(string $shopwareUrl, string $token)
+    public function __construct(ShopwareConnector $shopwareConnector)
     {
-        $this->shopwareUrl = rtrim($shopwareUrl, '/');
-        $this->token = $token;
+        $this->shopwareConnector = $shopwareConnector;
     }
 
-    public function upload(string $filePath): ?string
+    public function uploadMedia(string $imagePath, string $productName): ?string
     {
-        if (!file_exists($filePath)) {
-            throw new \RuntimeException("❌ Bild existiert nicht: $filePath");
+        if (!file_exists($imagePath)) {
+            return null;
         }
 
-        // TODO: Shopware 6 Media Upload implementieren
-        // Rückgabe: mediaId oder null
-        return null;
+        // Optional: Dateiname für SEO umbenennen
+        $ext = pathinfo($imagePath, PATHINFO_EXTENSION);
+        $safeName = preg_replace('/[^a-zA-Z0-9\-]/', '-', strtolower($productName));
+        $fileName = $safeName . '.' . $ext;
+
+        // TODO: Upload-Logik an Shopware API
+        // Return Media-ID oder null
+        return 'dummy-media-id';
     }
 }
