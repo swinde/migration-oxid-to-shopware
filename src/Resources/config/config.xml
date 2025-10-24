@@ -1,47 +1,89 @@
 <?xml version="1.0" encoding="utf-8"?>
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:noNamespaceSchemaLocation="../../../../../vendor/shopware/platform/src/Core/Framework/Plugin/Manifest/schema/config.xsd">
+        xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/shopware/shopware/trunk/src/Core/System/SystemConfig/Schema/config.xsd">
+
     <card>
-        <title>Migration Oxid -> Shopware</title>
+        <title>Migration OXID → Shopware</title>
 
         <input-field type="text">
-            <name>accessKeyId</name>
-            <label>Shopware Access Key ID</label>
-            <defaultValue></defaultValue>
-        </input-field>
-
-        <input-field type="text">
-            <name>accessKeySecret</name>
-            <label>Shopware Access Key Secret</label>
-            <defaultValue></defaultValue>
-        </input-field>
-
-        <input-field type="text">
-            <name>oxidDbHost</name>
+            <name>oxidHost</name>
             <label>OXID DB Host</label>
             <defaultValue>localhost</defaultValue>
         </input-field>
 
         <input-field type="text">
-            <name>oxidDbName</name>
+            <name>oxidPort</name>
+            <label>OXID DB Port</label>
+            <defaultValue>3306</defaultValue>
+        </input-field>
+
+        <input-field type="text">
+            <name>oxidDatabase</name>
             <label>OXID DB Name</label>
         </input-field>
 
         <input-field type="text">
-            <name>oxidDbUser</name>
+            <name>oxidUser</name>
             <label>OXID DB User</label>
         </input-field>
 
         <input-field type="text">
-            <name>oxidDbPass</name>
+            <name>oxidPassword</name>
             <label>OXID DB Passwort</label>
         </input-field>
 
         <input-field type="text">
             <name>oxidImageBasePath</name>
             <label>OXID Bildpfad</label>
-            <defaultValue>/var/www/html/oxid/out/pictures/master/product</defaultValue>
+            <defaultValue>https://www.seifenstueck.de/out/pictures/master/product</defaultValue>
         </input-field>
 
+
     </card>
+
+    <!-- SSH Tunnel (optional) -->
+    <card>
+        <title>SSH Tunnel (optional)</title>
+
+        <input-field type="text">
+            <name>sshHost</name>
+            <label>SSH Host</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>sshPort</name>
+            <label>SSH Port</label>
+            <defaultValue>22</defaultValue>
+        </input-field>
+
+        <input-field type="text">
+            <name>sshUser</name>
+            <label>SSH Benutzer</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>sshKeyPath</name>
+            <label>Pfad zum privaten SSH Schlüssel</label>
+        </input-field>
+    </card>
+
+    <!-- Shopware Access Key ID && Secret ID-->
+    <card>
+        <input-field type="text">
+            <name>apiUrl</name>
+            <label>Shopware API URL</label>
+        </input-field>
+
+        <title>Shopware Access Key ID und Secret ID </title>
+        <input-field type="text">
+            <name>accessKeyId</name>
+            <label>Shopware Access Key ID</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>accessKeySecret</name>
+            <label>Shopware Access Key Secret</label>
+        </input-field>
+    </card>
+
 </config>

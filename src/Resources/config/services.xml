@@ -4,34 +4,38 @@
            xsi:schemaLocation="http://symfony.com/schema/dic/services
                                https://symfony.com/schema/dic/services/services-1.0.xsd">
 
-    <!-- Standardmäßige Autowiring- und Autoconfigure-Einstellungen -->
     <services>
+        <!-- SystemConfigService wird vom Core bereitgestellt; kein eigener Eintrag nötig -->
 
-        <!-- Dein ProductMigrator Service -->
-        <service id="MigrationSwinde\MigrationOxidToShopware\Service\ProductMigrator" public="true">
+        <!-- Factories (lesen Werte aus config.xml via SystemConfig) -->
+        <service id="MigrationSwinde\MigrationOxidToShopware\Service\ProductMigratorFactory" public="true">
             <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
         </service>
 
-        <!-- MediaUploader Service -->
-        <service id="MigrationSwinde\MigrationOxidToShopware\Service\MediaUploader" public="true"/>
+        <service id="MigrationSwinde\MigrationOxidToShopware\Service\CategoryMigratorFactory" public="true">
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+        </service>
 
-        <!-- OxidConnector Service -->
-        <service id="MigrationSwinde\MigrationOxidToShopware\Service\OxidConnector" public="true"/>
+        <!-- Migratoren werden über die Factories erstellt -->
+        <service id="MigrationSwinde\MigrationOxidToShopware\Service\ProductMigrator" public="true">
+            <factory service="MigrationSwinde\MigrationOxidToShopware\Service\ProductMigratorFactory" method="create"/>
+        </service>
 
-        <!-- ShopwareConnector Service -->
-        <service id="MigrationSwinde\MigrationOxidToShopware\Service\ShopwareConnector" public="true"/>
+        <service id="MigrationSwinde\MigrationOxidToShopware\Service\CategoryMigrator" public="true">
+            <factory service="MigrationSwinde\MigrationOxidToShopware\Service\CategoryMigratorFactory" method="create"/>
+        </service>
 
-        <!-- Konsolenbefehl für Migration -->
+        <!-- Haupt-Command: erwartet (CategoryMigrator, ProductMigrator) in dieser Reihenfolge -->
         <service id="MigrationSwinde\MigrationOxidToShopware\Command\MigrateOxidCommand">
             <tag name="console.command"/>
+            <argument type="service" id="MigrationSwinde\MigrationOxidToShopware\Service\CategoryMigrator"/>
             <argument type="service" id="MigrationSwinde\MigrationOxidToShopware\Service\ProductMigrator"/>
         </service>
 
-        <!-- Optional: MigrationCommand (falls du mehrere Commands hast)-->
-        <service id="MigrationSwinde\MigrationOxidToShopware\Command\MigrationCommand" public="true">
-             <tag name="console.command"/>
+        <!-- Check-Command: nimmt eine Factory (nutze Product oder Category, egal) -->
+        <service id="MigrationSwinde\MigrationOxidToShopware\Command\CheckMigrationConfigCommand">
+            <tag name="console.command"/>
+            <argument type="service" id="MigrationSwinde\MigrationOxidToShopware\Service\ProductMigratorFactory"/>
         </service>
-
     </services>
 </container>
-

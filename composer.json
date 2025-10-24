@@ -2,6 +2,7 @@
   "name": "swinde/migration-oxid-to-shopware",
   "description": "Shopware 6 plugin to migrate products from OXID eShop",
   "type": "shopware-platform-plugin",
+  "version": "0.3.0-beta",
   "license": "MIT",
   "authors": [
     {
