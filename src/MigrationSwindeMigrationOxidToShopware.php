@@ -12,4 +12,5 @@ class MigrationSwindeMigrationOxidToShopware extends Plugin
         parent::install($installContext);
         // Optional: Tabellen oder Defaults initialisieren
     }
+
 }

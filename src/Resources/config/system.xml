@@ -40,25 +40,7 @@
         </input-field>
     </card>
 
-    <!-- Shopware API -->
-    <card>
-        <title>Shopware API</title>
 
-        <input-field type="text">
-            <name>apiUrl</name>
-            <label>Shopware API URL</label>
-        </input-field>
-
-        <input-field type="text">
-            <name>accessKeyId</name>
-            <label>Shopware Access Key ID</label>
-        </input-field>
-
-        <input-field type="text">
-            <name>accessKeySecret</name>
-            <label>Shopware Access Key Secret</label>
-        </input-field>
-    </card>
 
     <!-- SSH Tunnel (optional) -->
     <card>

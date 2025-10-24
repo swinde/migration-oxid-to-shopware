@@ -1,127 +1,71 @@
 <?php
+
 declare(strict_types=1);
 
 namespace MigrationSwinde\MigrationOxidToShopware\Service;
 
 use PDO;
-use PDOException;
+use Psr\Log\LoggerInterface;
 
-/**
- * Stellt eine Verbindung zur OXID-Datenbank her
- * und bietet Methoden zum Abrufen von Produkten und Kategorien.
- */
-class OxidConnector
+final class OxidConnector
 {
-    private array $dbConfig;
     private PDO $pdo;
+    private LoggerInterface $logger;
 
-    /**
-     * Konstruktor – Initialisiert die Verbindung zur OXID-Datenbank
-     */
-    public function __construct(array $dbConfig)
+    public function __construct(PDO $pdo, LoggerInterface $logger)
     {
-        $this->dbConfig = $dbConfig;
-        $this->connect();
+        $this->pdo = $pdo;
+        $this->logger = $logger;
     }
 
-    /**
-     * Stellt die Verbindung zur OXID-Datenbank her
-     */
-    private function connect(): void
+    public function getCategories(): array
     {
-        $dsn = sprintf(
-            'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
-            $this->dbConfig['host'],
-            $this->dbConfig['port'] ?? 3306,
-            $this->dbConfig['dbname']
-        );
+        $sql = "
+            SELECT
+                OXID          AS id,
+                CASE
+                    WHEN OXPARENTID IN ('oxrootid', '') THEN NULL
+                    ELSE OXPARENTID
+                END            AS parentId,
+                OXTITLE       AS name,
+                OXDESC        AS description,
+                OXACTIVE      AS active,
+                OXSORT        AS position,
+                OXKEYWORDS    AS metaKeywords,
+                OXLONGDESC    AS metaDescription
+            FROM oxcategories
+            ORDER BY OXLEFT
+        ";
 
         try {
-            $this->pdo = new PDO(
-                $dsn,
-                $this->dbConfig['user'],
-                $this->dbConfig['password'],
-                [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                ]
+            $stmt = $this->pdo->query($sql);
+            $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (!$categories) {
+                $this->logger->warning('⚠️ Keine Kategorien aus OXID abgerufen.');
+                return [];
+            }
+
+            // Debug-Ausgabe – legt JSON im Projektordner ab
+            $previewPath = __DIR__ . '/../../categories_preview.json';
+            file_put_contents(
+                $previewPath,
+                json_encode($categories, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
             );
-        } catch (PDOException $e) {
-            throw new \RuntimeException('Fehler bei der Verbindung zur OXID-Datenbank: ' . $e->getMessage());
+            $this->logger->info('📝 Kategorien-Vorschau gespeichert unter ' . $previewPath);
+
+            return $categories;
+        } catch (\Throwable $e) {
+            $this->logger->error('❌ Fehler beim Laden der Kategorien: ' . $e->getMessage());
+            return [];
         }
     }
 
-    // ------------------------------------------------------------
-    // 🗂 KATEGORIEN
-    // ------------------------------------------------------------
-
-    /**
-     * Holt alle Kategorien aus der OXID-Datenbank (auch inaktive)
-     */
+    // Alte Funktion darf bleiben, wenn andere Teile sie brauchen
     public function fetchCategories(): array
     {
         $sql = 'SELECT * FROM oxcategories';
         $stmt = $this->pdo->query($sql);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    // ------------------------------------------------------------
-    // 📦 PRODUKTE
-    // ------------------------------------------------------------
-
-    /**
-     * Holt alle Produkte aus der OXID-Datenbank (ohne Varianten)
-     */
-    public function fetchProducts(): array
-    {
-        $sql = 'SELECT * FROM oxarticles WHERE OXPARENTID = "" OR OXPARENTID IS NULL';
-        $stmt = $this->pdo->query($sql);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    // ------------------------------------------------------------
-    // 🧩 PRODUKT-BILDVERKNÜPFUNGEN
-    // ------------------------------------------------------------
-
-    /**
-     * Holt alle zugehörigen Produktbilder für ein OXID-Produkt
-     */
-    public function fetchImages(array $product): array
-    {
-        $images = [];
-        for ($i = 1; $i <= 12; $i++) {
-            $col = "OXPIC{$i}";
-            if (!empty($product[$col])) {
-                $images[] = rtrim($this->dbConfig['image_base_path'], '/') . '/' . $i . '/' . $product[$col];
-            }
-        }
-        return $images;
-    }
-
-    // ------------------------------------------------------------
-    // 🔗 PRODUKT–KATEGORIE ZUORDNUNG
-    // ------------------------------------------------------------
-
-    /**
-     * Liefert die Zuordnungen von Produkten zu Kategorien aus oxobject2category
-     *
-     * @return array Array mit ['oxobjectid' => 'Produkt-ID', 'oxcatid' => 'Kategorie-ID']
-     */
-    public function fetchProductCategoryRelations(): array
-    {
-        $sql = 'SELECT oxobjectid, oxcatid FROM oxobject2category';
-        $stmt = $this->pdo->query($sql);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    /**
-     * Holt alle Produkt-Kategorie-Zuordnungen aus OXID
-     *
-     * @return array<int, array{product_id: string, category_id: string}>
-     */
-    public function fetchProductCategoryAssignments(): array
-    {
-        $stmt = $this->pdo->query('SELECT oxobjectid AS product_id, oxcatid AS category_id FROM oxobject2category');
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }

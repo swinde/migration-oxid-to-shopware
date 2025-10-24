@@ -1,9 +1,10 @@
-<?php declare(strict_types=1);
+<?php
 
-namespace MigrationSwinde\MigrationShop\Helper;
+namespace MigrationSwinde\MigrationOxidToShopware\Helper;
 
-class UUIDHelper{
-    public static function uuid_create(): string
+final class UUIDHelper
+{
+    public static function generate(): string
     {
         return bin2hex(random_bytes(16));
     }
