@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<system xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/shopware/shopware/trunk/src/Core/System/SystemConfig/Schema/system.xsd">
+
+    <!-- OXID Datenbank -->
+    <card>
+        <title>OXID Datenbank</title>
+
+        <input-field type="text">
+            <name>oxidHost</name>
+            <label>OXID DB Host</label>
+            <defaultValue>localhost</defaultValue>
+        </input-field>
+
+        <input-field type="text">
+            <name>oxidPort</name>
+            <label>OXID DB Port</label>
+            <defaultValue>3306</defaultValue>
+        </input-field>
+
+        <input-field type="text">
+            <name>oxidDatabase</name>
+            <label>OXID DB Name</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>oxidUser</name>
+            <label>OXID DB User</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>oxidPassword</name>
+            <label>OXID DB Passwort</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>oxidImageBasePath</name>
+            <label>OXID Bildpfad</label>
+            <defaultValue>https://www.seifenstueck.de/out/pictures/master/product</defaultValue>
+        </input-field>
+    </card>
+
+    <!-- Shopware API -->
+    <card>
+        <title>Shopware API</title>
+
+        <input-field type="text">
+            <name>apiUrl</name>
+            <label>Shopware API URL</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>accessKeyId</name>
+            <label>Shopware Access Key ID</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>accessKeySecret</name>
+            <label>Shopware Access Key Secret</label>
+        </input-field>
+    </card>
+
+    <!-- SSH Tunnel (optional) -->
+    <card>
+        <title>SSH Tunnel (optional)</title>
+
+        <input-field type="text">
+            <name>sshHost</name>
+            <label>SSH Host</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>sshPort</name>
+            <label>SSH Port</label>
+            <defaultValue>22</defaultValue>
+        </input-field>
+
+        <input-field type="text">
+            <name>sshUser</name>
+            <label>SSH Benutzer</label>
+        </input-field>
+
+        <input-field type="text">
+            <name>sshKeyPath</name>
+            <label>Pfad zum privaten SSH Schlüssel</label>
+        </input-field>
+    </card>
+
+</system>
