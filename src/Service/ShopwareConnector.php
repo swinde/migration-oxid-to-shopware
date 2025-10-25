@@ -1,119 +1,68 @@
 <?php
 
-declare(strict_types=1);
-
 namespace MigrationSwinde\MigrationOxidToShopware\Service;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
-use PDO;
 use Psr\Log\LoggerInterface;
 
-/**
- * Verbindung zur Shopware 6 Admin API.
- * Lädt API-Credentials automatisch aus der Integration-Tabelle,
- * mit Fallback auf manuelle Konfiguration (z. B. .env oder services.yaml).
- */
 final class ShopwareConnector
 {
     private Client $http;
-    private string $baseUrl;
-    private ?string $clientId;
-    private ?string $clientSecret;
-
+    private string $apiBase;
+    private ?string $integrationLabel = null;
+    private string $accessKeyId;
+    private string $accessKeySecret;
     private ?string $accessToken = null;
-    private ?int $tokenExpiresAt = null;
-
-    private PDO $pdo;
     private LoggerInterface $logger;
 
-    public function __construct(
-        PDO $pdo,
-        LoggerInterface $logger,
-        string $baseUrl,
-        ?string $clientId = null,
-        ?string $clientSecret = null
-    ) {
-        $this->pdo = $pdo;
-        $this->logger = $logger;
-        $this->baseUrl = rtrim($baseUrl, '/');
-        $this->clientId = $clientId;
-        $this->clientSecret = $clientSecret;
-
-        $this->http = new Client([
-            'base_uri' => $this->baseUrl,
-            'timeout'  => 30,
-        ]);
-    }
-
-    // ⚙️ Lädt Zugangsdaten automatisch aus der Shopware DB
-    public function loadCredentialsFromIntegration(string $integrationLabel): void
+    public function __construct(string $apiUrl, string $accessKeyId, string $accessKeySecret, LoggerInterface $logger, ?string $integrationLabel = null)
     {
-        try {
-            $sql = "
-                SELECT access_key, secret_access_key
-                FROM integration
-                WHERE label = :label AND deleted_at IS NULL
-                LIMIT 1
-            ";
-            $stmt = $this->pdo->prepare($sql);
-            $stmt->execute(['label' => $integrationLabel]);
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$row) {
-                $this->logger->warning("Integration '$integrationLabel' nicht gefunden – nutze Fallback-Credentials.");
-                return;
-            }
-
-            $this->clientId = $row['access_key'];
-            $this->clientSecret = $row['secret_access_key'];
-            $this->logger->info("API-Credentials erfolgreich aus Integration '$integrationLabel' geladen.");
-        } catch (\Throwable $e) {
-            $this->logger->error("Fehler beim Laden der Integration '$integrationLabel': " . $e->getMessage());
-        }
+        $this->apiBase = rtrim($apiUrl, '/');
+        $this->accessKeyId = $accessKeyId;
+        $this->accessKeySecret = $accessKeySecret;
+        $this->logger = $logger;
+        $this->integrationLabel = $integrationLabel;
+        $this->http = new \GuzzleHttp\Client(['base_uri' => $this->apiBase]);
     }
 
-    // ✅ Authentifizierung (JWT) mit Auto-Refresh
+
     private function ensureAccessToken(): void
     {
-        if ($this->accessToken === null || $this->tokenExpiresSoon()) {
-            $this->refreshAccessToken();
+        if ($this->accessToken) {
+            return;
         }
-    }
-
-    private function tokenExpiresSoon(): bool
-    {
-        return $this->tokenExpiresAt === null || (time() + 60) >= $this->tokenExpiresAt;
+        $this->refreshAccessToken();
     }
 
     private function refreshAccessToken(): void
     {
-        if (!$this->clientId || !$this->clientSecret) {
-            throw new \RuntimeException('Keine gültigen API-Zugangsdaten (Client-ID oder Secret fehlen).');
-        }
-
-        $res = $this->http->post('/api/oauth/token', [
-            'headers' => ['Accept' => 'application/json'],
-            'form_params' => [
-                'grant_type'    => 'client_credentials',
-                'client_id'     => $this->clientId,
-                'client_secret' => $this->clientSecret,
+        $res = $this->http->post($this->apiBase . '/api/oauth/token', [
+            'json' => [
+                'grant_type' => 'client_credentials',
+                'client_id' => $this->accessKeyId,
+                'client_secret' => $this->accessKeySecret,
             ],
         ]);
 
-        $data = json_decode((string)$res->getBody(), true, 512, JSON_THROW_ON_ERROR);
-        $this->accessToken = $data['access_token'];
-        $this->tokenExpiresAt = time() + (int)$data['expires_in'];
+        $data = json_decode((string)$res->getBody(), true);
+        $this->accessToken = $data['access_token'] ?? null;
+
+        if (!$this->accessToken) {
+            throw new \RuntimeException('Access Token konnte nicht abgerufen werden.');
+        }
 
         $this->logger->info('Shopware Access-Token erfolgreich erneuert.');
     }
 
-    // 🔁 Universelle API-Anfrage mit Retry bei 401
     public function requestJson(string $method, string $uri, array $options = [], bool $didRetry = false): array
     {
         $this->ensureAccessToken();
         $options['headers']['Authorization'] = 'Bearer ' . $this->accessToken;
         $options['headers']['Accept'] = 'application/json';
+
+        /** @var \Psr\Http\Message\ResponseInterface|null $res */
+        $res = null;
 
         try {
             $res = $this->http->request($method, $uri, $options);
@@ -123,26 +72,111 @@ final class ShopwareConnector
                 $this->refreshAccessToken();
                 return $this->requestJson($method, $uri, $options, true);
             }
+
+            if ($e->hasResponse()) {
+                $this->logger->error("❌ Fehlerhafte API-Antwort ({$method} {$uri}): " . (string)$e->getResponse()->getBody());
+            }
             throw $e;
         }
 
-        return json_decode((string)$res->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        if (!$res) {
+            $this->logger->error("❌ Keine Antwort erhalten für {$method} {$uri}.");
+            return [];
+        }
+
+        $status = $res->getStatusCode();
+        $body = (string)$res->getBody();
+
+        if (empty($body)) {
+            if ($status === 204) {
+                $this->logger->info("✅ {$method} {$uri} erfolgreich (HTTP 204 – kein Inhalt).");
+                return [];
+            }
+            $this->logger->warning("⚠️ Leere Antwort von Shopware ({$status}) für {$method} {$uri}.");
+            return [];
+        }
+
+        try {
+            return json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            $this->logger->error("❌ JSON Decode Error bei {$method} {$uri}: " . $e->getMessage());
+            $this->logger->debug("Antwort-Inhalt: " . $body);
+            throw $e;
+        }
     }
 
-    // 📂 Beispiel-Endpunkt: Root-Kategorie holen
-    public function getRootCategoryId(): ?string
+    public function getRootCategoryId(?string $salesChannelName = null): ?string
     {
-        $data = $this->requestJson('GET', '/api/category', [
-            'query' => ['filter[name]' => 'Home']
-        ]);
+        $salesChannelName = $salesChannelName ?? 'Storefront';
 
-        return $data['data'][0]['id'] ?? null;
+        // 🧠 1️⃣ Integration prüfen (über /api/integration)
+        try {
+            $integrations = $this->requestJson('GET', $this->apiBase . '/api/integration');
+            $found = false;
+
+            foreach ($integrations['data'] ?? [] as $integration) {
+                $label = $integration['attributes']['label'] ?? '';
+                if (strcasecmp($label, $this->integrationLabel ?? 'OxidMigration') === 0) {
+                    $found = true;
+                    break;
+                }
+            }
+
+            if (!$found) {
+                $this->logger->warning("⚠️ Keine Shopware-Integration mit Label '{$this->integrationLabel}' gefunden. Verwende Plugin-Konfiguration.");
+            } else {
+                $this->logger->info("✅ Shopware-Integration '{$this->integrationLabel}' erfolgreich gefunden.");
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error('❌ Fehler beim Prüfen der Integration: ' . $e->getMessage());
+        }
+
+        // 🪴 2️⃣ Sales-Channels abrufen
+        try {
+            $channels = $this->requestJson('GET', $this->apiBase . '/api/sales-channel');
+            if (empty($channels['data'])) {
+                $this->logger->error('❌ Keine Sales-Channels gefunden.');
+                return null;
+            }
+
+            foreach ($channels['data'] as $sc) {
+                $name = $sc['attributes']['name'] ?? '';
+                if (strcasecmp($name, $salesChannelName) === 0) {
+                    $id = $sc['relationships']['navigationCategory']['data']['id'] ?? null;
+                    if ($id) {
+                        $this->logger->info("🪴 Root-Kategorie des Sales-Channels '{$salesChannelName}': {$id}");
+                        return $id;
+                    }
+                }
+            }
+
+            // 🧩 Fallback: ersten Channel nehmen
+            $fallback = $channels['data'][0]['relationships']['navigationCategory']['data']['id'] ?? null;
+            if ($fallback) {
+                $this->logger->warning("⚠️ Verwende Root-Kategorie des ersten Sales-Channels als Fallback: {$fallback}");
+                return $fallback;
+            }
+        } catch (\Throwable $e) {
+            $this->logger->error('❌ Fehler beim Laden der Sales-Channels: ' . $e->getMessage());
+        }
+
+        // 🚨 3️⃣ Wenn gar nichts gefunden wurde
+        $this->logger->error('❌ Keine gültige Root-Kategorie gefunden.');
+        return null;
     }
 
-    // 📂 Beispiel-Endpunkt: Kategorie anlegen
     public function createCategory(array $payload): string
     {
-        $res = $this->requestJson('POST', '/api/category', ['json' => $payload]);
-        return $res['data']['id'] ?? '';
+        // leere Felder entfernen
+        $clean = array_filter(
+            $payload,
+            static fn($v) => $v !== null && $v !== ''
+        );
+
+        $res = $this->requestJson('POST', $this->apiBase . '/api/category', [
+            'json' => $clean,
+        ]);
+
+        return $res['data']['id'] ?? ($res['id'] ?? '');
     }
 }

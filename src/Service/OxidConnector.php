@@ -26,13 +26,11 @@ final class OxidConnector
                 CASE
                     WHEN OXPARENTID IN ('oxrootid', '') THEN NULL
                     ELSE OXPARENTID
-                END            AS parentId,
+                END           AS parentId,
                 OXTITLE       AS name,
-                OXDESC        AS description,
+                OXLONGDESC        AS description,
                 OXACTIVE      AS active,
-                OXSORT        AS position,
-                OXKEYWORDS    AS metaKeywords,
-                OXLONGDESC    AS metaDescription
+                OXSORT        AS position
             FROM oxcategories
             ORDER BY OXLEFT
         ";

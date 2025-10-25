@@ -5,6 +5,7 @@ namespace MigrationSwinde\MigrationOxidToShopware;
 use Shopware\Core\Framework\Plugin;
 use Shopware\Core\Framework\Plugin\Context\InstallContext;
 
+
 class MigrationSwindeMigrationOxidToShopware extends Plugin
 {
     public function install(InstallContext $installContext): void
@@ -12,5 +13,4 @@ class MigrationSwindeMigrationOxidToShopware extends Plugin
         parent::install($installContext);
         // Optional: Tabellen oder Defaults initialisieren
     }
-
 }

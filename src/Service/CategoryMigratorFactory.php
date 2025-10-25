@@ -17,21 +17,24 @@ final class CategoryMigratorFactory
     private string $shopwareBaseUrl;
     private string $integrationLabel;
     private string $mapFile;
+    private string $salesChannelName;
+
 
     public function __construct(
         SystemConfigService $configService,
         LoggerInterface $logger,
         string $shopwareBaseUrl,
-        string $integrationLabel
+        string $integrationLabel,
+        string $salesChannelName
     ) {
         $this->configService   = $configService;
         $this->logger          = $logger;
         $this->shopwareBaseUrl = $shopwareBaseUrl;
         $this->integrationLabel = $integrationLabel;
-
-        // Standard-Speicherort für Kategorie-Mapping
-        $this->mapFile = \dirname(__DIR__, 1) . '/Resources/public/category_map.json';
+        $this->salesChannelName = $salesChannelName;
+        $this->mapFile = __DIR__ . '/../../var/category_map.json';
     }
+
 
     public function create(): CategoryMigrator
     {
@@ -76,11 +79,10 @@ final class CategoryMigratorFactory
         // 🧩 4️⃣ Connectoren erzeugen
         $oxidConnector = new OxidConnector($oxidPdo, $this->logger);
         $shopwareConnector = new ShopwareConnector(
-            $shopwarePdo,
-            $this->logger,
-            $apiUrl,
-            $accessKeyId,
-            $accessKeySecret
+            $this->shopwareBaseUrl,   // <- string aus .env / services.yaml
+            $accessKeyId,             // <- aus Plugin-Konfiguration
+            $accessKeySecret,         // <- aus Plugin-Konfiguration
+            $this->logger
         );
 
         // 🧩 5️⃣ CategoryMigrator erzeugen und zurückgeben
