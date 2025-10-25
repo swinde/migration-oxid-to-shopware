@@ -1,0 +1,34 @@
+parameters:
+  shopware.api_url: '%env(SHOPWARE_BASE_URL)%'
+  shopware.integration_label: '%env(SHOPWARE_INTEGRATION_LABEL)%'
+  shopware.sales_channel_name: '%env(SHOPWARE_SALES_CHANNEL)%'
+
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+    public: false
+
+  MigrationSwinde\MigrationOxidToShopware\:
+    resource: '../../*'
+    exclude: '../../{DependencyInjection,Entity,Tests,Resources}'
+
+  MigrationSwinde\MigrationOxidToShopware\Service\CategoryMigratorFactory:
+    arguments:
+      $configService: '@Shopware\Core\System\SystemConfig\SystemConfigService'
+      $logger: '@logger'
+      $shopwareBaseUrl: '%shopware.api_url%'
+      $integrationLabel: '%shopware.integration_label%'
+      $salesChannelName: '%shopware.sales_channel_name%'
+    public: true
+
+  MigrationSwinde\MigrationOxidToShopware\Command\MigrateOxidCommand:
+    arguments:
+      $configService: '@Shopware\Core\System\SystemConfig\SystemConfigService'
+      $logger: '@logger'
+      $shopwareBaseUrl: '%shopware.api_url%'
+      $integrationLabel: '%shopware.integration_label%'
+      $salesChannelName: '%shopware.sales_channel_name%'
+    tags: ['console.command']
+
+
