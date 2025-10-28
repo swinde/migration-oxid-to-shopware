@@ -25,112 +25,81 @@ final class CategoryMigrator
         $this->logger = $logger;
     }
 
-    private function isUuid(?string $v): bool
-    {
-        return is_string($v)
-            && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $v) === 1;
-    }
-
     public function migrate(): void
     {
-        $categories = $this->oxid->getCategories();
+        $this->logger->info("🚀 Starte Kategorie-Migration ...");
+
+        // --- Kategorien aus OXID laden ---
+        $categories = $this->oxid->fetchCategories();
+        $this->logger->info("📦 OXID-Kategorien geladen: " . count($categories));
+
+        // --- Root-Kategorie in Shopware ermitteln ---
+        $rootCategoryId = $this->shopware->getRootCategoryId();
+        if (!$rootCategoryId) {
+            throw new \RuntimeException('❌ Root category not found or invalid navigationCategoryId.');
+        }
+        $this->logger->info("🏠 Verwende Shopware-Root-Kategorie-ID: {$rootCategoryId}");
+
         $mapping = [];
 
-        // 🪴 Root-Kategorie (Sales-Channel) bestimmen
-        $homeId = $this->shopware->getRootCategoryId();
-        if (!$this->isUuid($homeId)) {
-         throw new \RuntimeException('Root category "Home" not found or invalid UUID');
-        }
-
-        // 🌳 Hauptkategorien (ohne Parent) anlegen
+        // --- 1️⃣ Hauptkategorien anlegen ---
         foreach ($categories as $cat) {
-            if (!empty($cat['parentId'])) {
+            if ($cat['OXROOTID'] !== $cat['OXID'] && $cat['OXPARENTID'] !== '') {
                 continue;
             }
 
             $payload = [
-                'name'   => $cat['name'],
-                'active' => (bool)$cat['active'],
-                'parentId' => $homeId,
-                'metaTitle' => $cat['metaKeywords'] ?? null,
-                'metaDescription' => $cat['metaDescription'] ?? null,
-                'position' => (int)($cat['position'] ?? 0),
+                'name' => $cat['OXTITLE'],
+                'active' => (bool)$cat['OXACTIVE'],
+                'parentId' => $rootCategoryId,
+                'position' => (int)$cat['OXSORT'] ?? 0,
+                'metaTitle' => $cat['OXKEYWORDS'] ?? null,
+                'metaDescription' => $cat['OXDESC'] ?? null,
             ];
 
             $swId = $this->shopware->createCategory($payload);
-            $mapping[$cat['id']] = $swId;
-            $this->logger->info("✅ Root-Kategorie '{$cat['name']}' erstellt.");
+            $mapping[$cat['OXID']] = $swId;
+
+            $this->logger->info("✅ Hauptkategorie '{$cat['OXTITLE']}' erstellt (Shopware-ID: {$swId})");
         }
 
-        // 🌿 Subkategorien mit Mehrfach-Pass anlegen
+        // --- 2️⃣ Unterkategorien anlegen ---
         $remaining = true;
-        $maxPasses = 6;
-        $orphans = [];
+        $maxPasses = 5;
 
         while ($remaining && $maxPasses-- > 0) {
             $remaining = false;
 
             foreach ($categories as $cat) {
-                if (empty($cat['parentId'])) {
+                if (isset($mapping[$cat['OXID']])) {
                     continue;
                 }
-                if (isset($mapping[$cat['id']])) {
-                    continue;
-                }
-                if (!isset($mapping[$cat['parentId']])) {
-                    $remaining = true;
-                    $orphans[$cat['id']] = $cat;
-                    continue;
-                }
+                $parentId = $cat['OXPARENTID'];
 
-                $parentUuid = $mapping[$cat['parentId']];
-                if (!$this->isUuid($parentUuid)) {
-                    $this->logger->warning("⚠️ Parent UUID ungültig für {$cat['name']} -> übersprungen.");
+                if (!isset($mapping[$parentId])) {
                     $remaining = true;
-                    $orphans[$cat['id']] = $cat;
-                    continue;
+                    continue; // Parent noch nicht angelegt
                 }
 
                 $payload = [
-                    'name'   => $cat['name'],
-                    'active' => (bool)$cat['active'],
-                    'parentId' => $parentUuid,
-                    'metaTitle' => $cat['metaKeywords'] ?? null,
-                    'metaDescription' => $cat['metaDescription'] ?? null,
-                    'position' => (int)($cat['position'] ?? 0),
+                    'name' => $cat['OXTITLE'],
+                    'active' => (bool)$cat['OXACTIVE'],
+                    'parentId' => $mapping[$parentId],
+                    'position' => (int)$cat['OXSORT'] ?? 0,
+                    'metaTitle' => $cat['OXKEYWORDS'] ?? null,
+                    'metaDescription' => $cat['OXDESC'] ?? null,
                 ];
 
-                try {
-                    $swId = $this->shopware->createCategory($payload);
-                    $mapping[$cat['id']] = $swId;
-                    unset($orphans[$cat['id']]);
-                    $this->logger->info("✅ Subkategorie '{$cat['name']}' unter '{$cat['parentId']}' erstellt.");
-                } catch (\Throwable $e) {
-                    $this->logger->error("❌ Fehler bei '{$cat['name']}': " . $e->getMessage());
-                    $remaining = true;
-                }
+                $swId = $this->shopware->createCategory($payload);
+                $mapping[$cat['OXID']] = $swId;
+
+                $this->logger->info("🧩 Unterkategorie '{$cat['OXTITLE']}' unter '{$parentId}' erstellt");
             }
         }
 
-        if (!empty($orphans)) {
-            $this->logger->warning('⚠️ Verwaiste Kategorien nach Migration: ' . count($orphans));
-            $dir = \dirname($this->mapFile);
-            if (!is_dir($dir)) {
-                mkdir($dir, 0775, true);
-            }
-            file_put_contents(
-                $dir . '/category_orphans.json',
-                json_encode(array_values($orphans), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
-            );
-        }
-
-        // 💾 Mapping speichern
-        $dir = \dirname($this->mapFile);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0775, true);
-        }
-
-        file_put_contents($this->mapFile, json_encode($mapping, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-        $this->logger->info('✅ Category migration completed.');
+        // --- Mapping speichern ---
+        file_put_contents($this->mapFile, json_encode($mapping, JSON_PRETTY_PRINT));
+        $this->logger->info('📁 Kategorie-Mapping gespeichert unter ' . $this->mapFile);
+        $this->logger->info('🏁 Kategorie-Migration abgeschlossen.');
     }
 }
