@@ -8,8 +8,8 @@
 
 # === Konfiguration ===
 SHOPWARE_URL="https://test-sw6.ddev.site"
-CLIENT_ID="SWIAOW1IBFHHSVHHDZQ1VLB1MQ"
-CLIENT_SECRET="SGVTTUF2V0I2bXNaWWlqTEJWWjRyWEhGWUo1c2NsRTdhNFNZaHY"
+CLIENT_ID="SWIAWFRLYKNUCMOWCDBHVVI4UA"
+CLIENT_SECRET="TEFndUMyejlGWHFRaXZPQXliSGNVdFhmZFVudE8wald4eFhmSEo"
 
 # === Access Token holen ===
 echo "🔐 Hole Access Token von ${SHOPWARE_URL} ..."
@@ -21,7 +21,9 @@ TOKEN_RESPONSE=$(curl -s -X POST "${SHOPWARE_URL}/api/oauth/token" \
         \"client_secret\": \"${CLIENT_SECRET}\"
       }")
 
-ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -oP '(?<=\"access_token\":\")[^\"]*')
+ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
+
+
 
 if [ -z "$ACCESS_TOKEN" ]; then
   echo "❌ Fehler: Konnte keinen Access Token abrufen!"

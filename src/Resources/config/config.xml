@@ -67,6 +67,16 @@
         </input-field>
     </card>
 
+    <card>
+        <title>Shopware Sales Cannel ID</title>
+        <input-field type="text">
+            <name>salesChannelId</name>
+            <label>Sales Channel ID</label>
+            <helptext>Die UUID des Zielverkaufskanals (z. B. für 'Storefront')</helptext>
+        </input-field>
+
+    </card>
+
     <!-- Shopware Access Key ID && Secret ID-->
     <card>
         <input-field type="text">

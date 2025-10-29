@@ -1,7 +1,6 @@
 parameters:
   shopware.api_url: '%env(SHOPWARE_BASE_URL)%'
   shopware.integration_label: '%env(SHOPWARE_INTEGRATION_LABEL)%'
-  shopware.sales_channel_name: 'Storefront'
 
 services:
   _defaults:
@@ -13,22 +12,17 @@ services:
     resource: '../../*'
     exclude: '../../{DependencyInjection,Entity,Tests,Resources}'
 
+  MigrationSwinde\MigrationOxidToShopware\Command\MigrateOxidCommand:
+    arguments:
+      $factory: '@MigrationSwinde\MigrationOxidToShopware\Service\CategoryMigratorFactory'
+      $logger: '@monolog.logger.migration'
+    tags: ['console.command']
+
   MigrationSwinde\MigrationOxidToShopware\Service\CategoryMigratorFactory:
     arguments:
       $configService: '@Shopware\Core\System\SystemConfig\SystemConfigService'
-      $logger: '@logger'
-      $shopwareBaseUrl: '%shopware.api_url%'
-      $salesChannelName: '%shopware.sales_channel_name%'
-
+      $logger: '@monolog.logger.migration'
+      $shopwareConnection: '@Doctrine\DBAL\Connection'
     public: true
-
-  MigrationSwinde\MigrationOxidToShopware\Command\MigrateOxidCommand:
-    arguments:
-      $configService: '@Shopware\Core\System\SystemConfig\SystemConfigService'
-      $logger: '@logger'
-      $shopwareBaseUrl: '%shopware.api_url%'
-      $integrationLabel: '%shopware.integration_label%'
-      $salesChannelName: '%shopware.sales_channel_name%'
-    tags: ['console.command']
 
 

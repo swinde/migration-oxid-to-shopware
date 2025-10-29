@@ -3,12 +3,12 @@
 namespace MigrationSwinde\MigrationOxidToShopware\Command;
 
 use MigrationSwinde\MigrationOxidToShopware\Service\CategoryMigratorFactory;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Psr\Log\LoggerInterface;
 
 #[AsCommand(
     name: 'migration:oxid',
@@ -17,7 +17,6 @@ use Psr\Log\LoggerInterface;
 final class MigrateOxidCommand extends Command
 {
     private CategoryMigratorFactory $factory;
-
     private LoggerInterface $logger;
 
     public function __construct(CategoryMigratorFactory $factory, LoggerInterface $logger)

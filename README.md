@@ -141,3 +141,7 @@ Bitte beschreibe deinen Anwendungsfall oder das Problem so konkret wie möglich.
 ### 🧩 Lizenz
 
 Dieses Projekt steht unter der **MIT-Lizenz**.
+
+### Bemerkung
+
+Die Datei src/Resources/config/packages/monolog.yaml muss nach config/packages/monolog.yaml kopiert werden.

@@ -5,101 +5,72 @@ namespace MigrationSwinde\MigrationOxidToShopware\Migration;
 use MigrationSwinde\MigrationOxidToShopware\Service\OxidConnector;
 use MigrationSwinde\MigrationOxidToShopware\Service\ShopwareConnector;
 use Psr\Log\LoggerInterface;
+use Shopware\Core\Framework\Uuid\Uuid;
 
 final class CategoryMigrator
 {
-    private OxidConnector $oxid;
-    private ShopwareConnector $shopware;
-    private string $mapFile;
-    private LoggerInterface $logger;
-
     public function __construct(
-        OxidConnector $oxid,
-        ShopwareConnector $shopware,
-        string $mapFile,
-        LoggerInterface $logger
-    ) {
-        $this->oxid = $oxid;
-        $this->shopware = $shopware;
-        $this->mapFile = $mapFile;
-        $this->logger = $logger;
-    }
+        private OxidConnector $oxid,
+        private ShopwareConnector $shopware,
+        private string $mapFile,
+        private LoggerInterface $logger
+    ) {}
 
     public function migrate(): void
     {
-        $this->logger->info("🚀 Starte Kategorie-Migration ...");
+        $this->logger->info('🚀 Starte Kategorie-Migration ...');
 
-        // --- Kategorien aus OXID laden ---
-        $categories = $this->oxid->fetchCategories();
-        $this->logger->info("📦 OXID-Kategorien geladen: " . count($categories));
+        $categories = $this->oxid->getCategories();
+        $this->logger->info("✅ Kategorien aus OXID geladen: " . count($categories));
 
-        // --- Root-Kategorie in Shopware ermitteln ---
-        $rootCategoryId = $this->shopware->getRootCategoryId();
-        if (!$rootCategoryId) {
+        $rootId = $this->shopware->getRootCategoryId('0199E6C14E3A737E825CF8871F33B9CC');
+        if (!$rootId) {
             throw new \RuntimeException('❌ Root category not found or invalid navigationCategoryId.');
         }
-        $this->logger->info("🏠 Verwende Shopware-Root-Kategorie-ID: {$rootCategoryId}");
 
         $mapping = [];
+        if (file_exists($this->mapFile)) {
+            $mapping = json_decode(file_get_contents($this->mapFile), true) ?: [];
+        }
 
-        // --- 1️⃣ Hauptkategorien anlegen ---
+        // 3️⃣ Hauptkategorien anlegen
         foreach ($categories as $cat) {
-            if ($cat['OXROOTID'] !== $cat['OXID'] && $cat['OXPARENTID'] !== '') {
-                continue;
+            $oxidId = $cat['OXID'] ?? $cat['id'] ?? null;
+
+            // 🔁 Prüfen, ob Kategorie schon migriert wurde
+            if (isset($mapping[$oxidId])) {
+                $existingId = $mapping[$oxidId];
+                if ($this->shopware->categoryExists($existingId)) {
+                    $this->logger->info("⏩ Kategorie '{$cat['name']}' bereits in Shopware vorhanden – überspringe.");
+                    continue;
+                }
             }
 
             $payload = [
-                'name' => $cat['OXTITLE'],
-                'active' => (bool)$cat['OXACTIVE'],
-                'parentId' => $rootCategoryId,
-                'position' => (int)$cat['OXSORT'] ?? 0,
-                'metaTitle' => $cat['OXKEYWORDS'] ?? null,
-                'metaDescription' => $cat['OXDESC'] ?? null,
+                'id' => Uuid::randomHex(),
+                'name' => $cat['name'] ?? 'Unbenannt',
+                'active' => (bool)($cat['OXACTIVE'] ?? true),
+                'parentId' => $rootId,
+                'visible' => true,
+                'type' => 'page',
+                'position' => (int)($cat['OXSORT'] ?? 0),
             ];
 
-            $swId = $this->shopware->createCategory($payload);
-            $mapping[$cat['OXID']] = $swId;
+            $response = $this->shopware->createCategory($payload);
 
-            $this->logger->info("✅ Hauptkategorie '{$cat['OXTITLE']}' erstellt (Shopware-ID: {$swId})");
-        }
-
-        // --- 2️⃣ Unterkategorien anlegen ---
-        $remaining = true;
-        $maxPasses = 5;
-
-        while ($remaining && $maxPasses-- > 0) {
-            $remaining = false;
-
-            foreach ($categories as $cat) {
-                if (isset($mapping[$cat['OXID']])) {
-                    continue;
-                }
-                $parentId = $cat['OXPARENTID'];
-
-                if (!isset($mapping[$parentId])) {
-                    $remaining = true;
-                    continue; // Parent noch nicht angelegt
-                }
-
-                $payload = [
-                    'name' => $cat['OXTITLE'],
-                    'active' => (bool)$cat['OXACTIVE'],
-                    'parentId' => $mapping[$parentId],
-                    'position' => (int)$cat['OXSORT'] ?? 0,
-                    'metaTitle' => $cat['OXKEYWORDS'] ?? null,
-                    'metaDescription' => $cat['OXDESC'] ?? null,
-                ];
-
-                $swId = $this->shopware->createCategory($payload);
-                $mapping[$cat['OXID']] = $swId;
-
-                $this->logger->info("🧩 Unterkategorie '{$cat['OXTITLE']}' unter '{$parentId}' erstellt");
+            if (!empty($response['data']['id'])) {
+                $mapping[$oxidId] = $response['data']['id'];
+                $this->logger->info("✅ Hauptkategorie '{$cat['name']}' angelegt (Shopware-ID: {$response['data']['id']}).");
+            } else {
+                $mapping[$oxidId] = $payload['id'];
+                $this->logger->warning("⚠️ Keine ID für '{$cat['name']}' erhalten – lokale ID gemappt.");
             }
+
+            file_put_contents($this->mapFile, json_encode($mapping, JSON_PRETTY_PRINT));
+            usleep(200000); // 0.2 Sek. Pause
         }
 
-        // --- Mapping speichern ---
-        file_put_contents($this->mapFile, json_encode($mapping, JSON_PRETTY_PRINT));
-        $this->logger->info('📁 Kategorie-Mapping gespeichert unter ' . $this->mapFile);
-        $this->logger->info('🏁 Kategorie-Migration abgeschlossen.');
+        $this->logger->info("📦 Category mapping gespeichert unter: {$this->mapFile}");
+        $this->logger->info("🏁 Kategorie-Migration abgeschlossen!");
     }
 }
