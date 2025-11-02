@@ -2,86 +2,128 @@
 
 namespace MigrationSwinde\MigrationOxidToShopware\Migration;
 
-use MigrationSwinde\MigrationOxidToShopware\Service\OxidConnector;
-use MigrationSwinde\MigrationOxidToShopware\Service\ShopwareConnector;
+use MigrationSwinde\MigrationOxidToShopware\Connectors\OxidConnector;
+use MigrationSwinde\MigrationOxidToShopware\Connectors\ShopwareConnector;
 use Psr\Log\LoggerInterface;
-use Shopware\Core\Framework\Uuid\Uuid;
 
-class CategoryMigrator
+class CategoryMigrator extends AbstractMigrator
 {
+    private array $migratedIds = []; // [oxidId => shopwareId]
+
     public function __construct(
         private OxidConnector $oxid,
         private ShopwareConnector $shopware,
-        private string $mapFile,
-        private LoggerInterface $logger
-    ) {}
-
-    /** OXID => Shopware-ID */
-    private array $categoryCache = [];
-
-    /** Neuer Einstiegspunkt (ersetzt dein bisheriges migrate()) */
-    public function migrateAll(): void
-    {
-        $categories = $this->oxid->getCategoriesIndexed(); // neu: indexiert nach OXID
-
-        // Root-Kategorien finden und rekursiv migrieren
-        foreach ($categories as $cat) {
-            if (empty($cat['OXPARENTID']) || $cat['OXPARENTID'] === 'oxrootid') {
-                $this->migrateCategory($cat, $categories);
-            }
-        }
-
-        $this->logger->info('Kategorienmigration abgeschlossen.');
+        LoggerInterface $logger
+    ) {
+        parent::__construct($logger);
     }
 
-    /** Rekursive Migration einer Kategorie inkl. Parent-Auflösung */
-    private function migrateCategory(array $category, array $all): void
+    /**
+     * Startet die rekursive Migration der kompletten Kategorie-Hierarchie.
+     */
+    public function migrateAll(?int $limit = null, bool $dryRun = null): void
     {
-        $oxidId = $category['OXID'];
-
-        if (isset($this->categoryCache[$oxidId])) {
-            return; // bereits angelegt
+        if ($dryRun !== null) {
+            $this->setDryRun($dryRun);
+        }
+        $categories = $this->oxid->getCategoriesIndexed();
+        if ($limit !== null) {
+            $categories = array_slice($categories, 0, $limit, true);
         }
 
-        // Parent sicherstellen (rekursiv)
-        $parentId = null;
-        $parentOxid = $category['OXPARENTID'] ?? null;
-        if (!empty($parentOxid) && $parentOxid !== 'oxrootid') {
-            if (!isset($this->categoryCache[$parentOxid]) && isset($all[$parentOxid])) {
-                $this->migrateCategory($all[$parentOxid], $all);
+        $roots = array_filter($categories, fn($c) =>
+            empty($c['OXPARENTID']) || $c['OXPARENTID'] === 'oxrootid'
+        );
+
+        $this->log(sprintf(
+            'Starte rekursive Migration von %d Root-Kategorien%s',
+            count($roots),
+            $this->isDryRun() ? ' (DRY-RUN)' : ''
+        ));
+
+        foreach ($roots as $root) {
+            $this->migrateCategoryRecursive($root, $categories);
+        }
+
+        $this->log('Migration abgeschlossen' . ($this->isDryRun() ? ' (DRY-RUN – keine Daten geschrieben)' : ''));
+    }
+
+    /**
+     * Rekursive Migration einer Kategorie und aller Unterkategorien.
+     */
+    private function migrateCategoryRecursive(array $cat, array $allCategories): void
+    {
+        $this->migrateCategory($cat);
+
+        // Alle Kinder dieser Kategorie suchen
+        foreach ($allCategories as $child) {
+            if ($child['OXPARENTID'] === $cat['OXID']) {
+                $this->migrateCategoryRecursive($child, $allCategories);
             }
-            $parentId = $this->categoryCache[$parentOxid] ?? null;
         }
+    }
 
-        // Payload inkl. Beschreibung
+    /**
+     * Migriert eine einzelne Kategorie (mit Dry-Run-Schutz und Bild-Upload).
+     */
+    private function migrateCategory(array $cat): void
+    {
+        // Parent ermitteln
+        $parentId = $this->mapParent($cat['OXPARENTID']);
+
         $payload = [
-            'name'        => $category['OXTITLE'] ?? '',
-            'description' => $category['OXDESC'] ?? '',
-            'active'      => (int)($category['OXACTIVE'] ?? 1) === 1,
-            'parentId'    => $parentId,
+            'name'           => $cat['OXTITLE'] ?? 'Unbenannte Kategorie',
+            'description'    => $cat['OXLONGDESC'] ?? '',
+            'parentId'       => $parentId,
+            'active'         => (bool)($cat['OXACTIVE'] ?? true),
+            'salesChannelId' => $this->shopware->getSalesChannelId(),
         ];
 
-        try {
-            $shopwareId = $this->shopware->createCategory($payload);
-            $this->categoryCache[$oxidId] = $shopwareId;
-            $this->logger->info(sprintf(
-                "%s%sKategorie '%s' (OXID: %s, Shopware: %s)",
-                $prefix,
-                $arrow,
-                $payload['name'],
-                $oxidId,
-                $shopwareId
-            ));
-
-            // Kinder migrieren
-            foreach ($all as $child) {
-                if (($child['OXPARENTID'] ?? null) === $oxidId) {
-                    $this->migrateCategory($child, $all, $depth + 1);
+        // 🧩 Bild hinzufügen (wenn vorhanden)
+        if (!empty($cat['OXTHUMB'])) {
+            if ($this->isDryRun()) {
+                $this->log("[DRY-RUN] Kategorie-Bild würde hochgeladen: {$cat['OXTHUMB']}", true);
+            } else {
+                $mediaId = $this->shopware->uploadCategoryMedia($cat['OXTHUMB'], false);
+                if (!empty($mediaId)) {
+                    $payload['mediaId'] = $mediaId;
                 }
             }
+        }
+
+        // 🧩 Leere Felder entfernen, damit Shopware keine Invalid UUID-Fehler wirft
+        foreach (['parentId', 'salesChannelId', 'mediaId'] as $key) {
+            if (empty($payload[$key])) {
+                unset($payload[$key]);
+            }
+        }
+
+        // 🧩 DRY-RUN → nur Log
+        if ($this->isDryRun()) {
+            $this->log("Kategorie '{$payload['name']}' würde erstellt werden.", true);
+            return;
+        }
+
+        try {
+            // 🧩 Kategorie anlegen
+            $shopwareId = $this->shopware->createCategory($payload);
+            $this->migratedIds[$cat['OXID']] = $shopwareId;
+            $this->log("Kategorie '{$payload['name']}' erfolgreich erstellt (ID: {$shopwareId}).");
         } catch (\Throwable $e) {
-            $this->logger->error("Fehler bei Kategorie {$oxidId}: " . $e->getMessage());
+            $this->logger->error("Fehler bei Kategorie {$cat['OXID']}: " . $e->getMessage());
         }
     }
-}
 
+
+    /**
+     * Gibt die Shopware-ID der Parent-Kategorie zurück.
+     */
+    private function mapParent(?string $oxidParentId): ?string
+    {
+        if (empty($oxidParentId) || $oxidParentId === 'oxrootid') {
+            return null;
+        }
+
+        return $this->migratedIds[$oxidParentId] ?? null;
+    }
+}

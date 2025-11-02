@@ -3,39 +3,92 @@
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
            xsi:schemaLocation="http://symfony.com/schema/dic/services
                                https://symfony.com/schema/dic/services/services-1.0.xsd">
+    <!-- ========================================================= -->
+    <!-- === Default-Werte für Plugin-Konfiguration ============== -->
+    <!-- ========================================================= -->
+    <parameters>
+        <parameter key="migration_oxid_to_shopware.config.apiUrl">https://test-sw6.ddev.site</parameter>
+        <parameter key="migration_oxid_to_shopware.config.accessKeyId">SWIAEGTKNELRCMNWEHJXAUNJBG</parameter>
+        <parameter key="migration_oxid_to_shopware.config.accessKeySecret">Y3BqS1dUVEJmRDNxRG9XaVJUYmJpQ3Y2cXZkc3piaFVSQ0w4MFI</parameter>
+
+        <parameter key="migration_oxid_to_shopware.config.oxidHost">db</parameter>
+        <parameter key="migration_oxid_to_shopware.config.oxidPort">3306</parameter>
+        <parameter key="migration_oxid_to_shopware.config.oxidDatabase">neue_db</parameter>
+        <parameter key="migration_oxid_to_shopware.config.oxidUser">db</parameter>
+        <parameter key="migration_oxid_to_shopware.config.oxidPassword">db</parameter>
+        <parameter key="migration_oxid_to_shopware.config.oxidImageBasePath">https://www.seifenstueck.de/out/pictures/master/</parameter>
+
+        <parameter key="migration_oxid_to_shopware.config.salesChannelId">0199E6C14E3A737E825CF8871F33B9CC</parameter>
+    </parameters>
 
     <services>
-        <!-- SystemConfigService wird vom Core bereitgestellt; kein eigener Eintrag nötig -->
 
-        <!-- Factories (lesen Werte aus config.xml via SystemConfig) -->
-        <service id="MigrationSwinde\MigrationOxidToShopware\Service\ProductMigratorFactory" public="true">
-            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+        <!-- ========================================================= -->
+        <!-- === Logger ============================================== -->
+        <!-- ========================================================= -->
+        <!-- Logger-Aliase: sowohl Interface als auch "monolog.logger" zeigen auf den Standard-Logger -->
+        <service id="Psr\Log\LoggerInterface" alias="logger" />
+        <!--<service id="monolog.logger" alias="logger" />-->
+
+        <!-- ========================================================= -->
+        <!-- === OXID Connector ====================================== -->
+        <!-- ========================================================= -->
+        <service id="MigrationSwinde\MigrationOxidToShopware\Connectors\OxidConnector">
+            <argument type="service" id="logger"/>
+
+            <!-- Wir erstellen PDO in der Factory -->
+            <factory service="MigrationSwinde\MigrationOxidToShopware\Factory\PdoFactory" method="createOxidPdo"/>
+
+            <argument type="service" id="logger"/>
         </service>
 
-        <service id="MigrationSwinde\MigrationOxidToShopware\Service\CategoryMigratorFactory" public="true">
-            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+        <!-- ========================================================= -->
+        <!-- === Shopware Connector ================================== -->
+        <!-- ========================================================= -->
+        <service id="MigrationSwinde\MigrationOxidToShopware\Connectors\ShopwareConnector">
+            <argument>%migration_oxid_to_shopware.config.apiUrl%</argument>
+            <argument>%migration_oxid_to_shopware.config.accessKeyId%</argument>
+            <argument>%migration_oxid_to_shopware.config.accessKeySecret%</argument>
+            <argument>%migration_oxid_to_shopware.config.oxidImageBasePath%</argument>
+            <argument>%migration_oxid_to_shopware.config.salesChannelId%</argument>
+            <argument type="service" id="logger"/>
         </service>
 
-        <!-- Migratoren werden über die Factories erstellt -->
-        <service id="MigrationSwinde\MigrationOxidToShopware\Service\ProductMigrator" public="true">
-            <factory service="MigrationSwinde\MigrationOxidToShopware\Service\ProductMigratorFactory" method="create"/>
+        <!-- ========================================================= -->
+        <!-- === Category Migrator =================================== -->
+        <!-- ========================================================= -->
+        <service id="MigrationSwinde\MigrationOxidToShopware\Migration\CategoryMigrator">
+            <argument type="service" id="MigrationSwinde\MigrationOxidToShopware\Connectors\OxidConnector"/>
+            <argument type="service" id="MigrationSwinde\MigrationOxidToShopware\Connectors\ShopwareConnector"/>
+            <argument type="service" id="logger"/>
         </service>
 
-        <service id="MigrationSwinde\MigrationOxidToShopware\Service\CategoryMigrator" public="true">
-            <factory service="MigrationSwinde\MigrationOxidToShopware\Service\CategoryMigratorFactory" method="create"/>
+        <!-- PDO Factory -->
+        <service id="MigrationSwinde\MigrationOxidToShopware\Factory\PdoFactory">
+            <argument type="service" id="logger"/>
         </service>
 
-        <!-- Haupt-Command: erwartet (CategoryMigrator, ProductMigrator) in dieser Reihenfolge -->
-        <service id="MigrationSwinde\MigrationOxidToShopware\Command\MigrateOxidCommand">
-            <tag name="console.command"/>
-            <argument type="service" id="MigrationSwinde\MigrationOxidToShopware\Service\CategoryMigrator"/>
-            <argument type="service" id="MigrationSwinde\MigrationOxidToShopware\Service\ProductMigrator"/>
+        <!-- PDO aus Factory (Oxid-Datenbank) -->
+        <service id="oxid_pdo" class="PDO">
+            <factory service="MigrationSwinde\MigrationOxidToShopware\Factory\PdoFactory" method="createOxidPdo"/>
+            <argument>%migration_oxid_to_shopware.config.oxidHost%</argument>
+            <argument>%migration_oxid_to_shopware.config.oxidPort%</argument>
+            <argument>%migration_oxid_to_shopware.config.oxidDatabase%</argument>
+            <argument>%migration_oxid_to_shopware.config.oxidUser%</argument>
+            <argument>%migration_oxid_to_shopware.config.oxidPassword%</argument>
         </service>
 
-        <!-- Check-Command: nimmt eine Factory (nutze Product oder Category, egal) -->
-        <service id="MigrationSwinde\MigrationOxidToShopware\Command\CheckMigrationConfigCommand">
-            <tag name="console.command"/>
-            <argument type="service" id="MigrationSwinde\MigrationOxidToShopware\Service\ProductMigratorFactory"/>
+        <!-- OxidConnector -->
+        <service id="MigrationSwinde\MigrationOxidToShopware\Connectors\OxidConnector">
+            <argument type="service" id="oxid_pdo"/>
+            <argument type="service" id="logger"/>
         </service>
+
+        <service id="MigrationSwinde\MigrationOxidToShopware\Command\MigrateCategoriesCommand">
+            <argument type="service" id="MigrationSwinde\MigrationOxidToShopware\Migration\CategoryMigrator"/>
+            <tag name="console.command" />
+        </service>
+
+
     </services>
 </container>

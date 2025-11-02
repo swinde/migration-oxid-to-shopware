@@ -1,9 +1,0 @@
-monolog:
-  channels: ['migration']
-
-  handlers:
-    migration:
-      type: stream
-      path: "%kernel.project_dir%/var/log/migration.log"
-      level: info
-      channels: ["migration"]
